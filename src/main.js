@@ -5,6 +5,7 @@ import { createDust } from './dust.js';
 import { createFruit } from './fruits.js';
 import { createJuice } from './juice.js';
 import { addLabel } from './label.js';
+import { createMotes } from './motes.js';
 
 const BASE_FOV = 45;
 const MAX_FOV_KICK = 22;
@@ -40,7 +41,10 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#000000');
+// The void: black while flying, tinted with each stop's colour while parked.
+const voidColor = new THREE.Color('#000000');
+const voidTarget = new THREE.Color('#000000');
+scene.background = voidColor;
 const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.1, 3000);
 
 const sun = new THREE.DirectionalLight('#fff3e0', 2.8);
@@ -63,12 +67,27 @@ const stations = FRUITS.map((content, i) => {
   return { ...content, ...fruit, position: LAYOUT[i], react: createReaction() };
 });
 
+// Only the current stop is shown while parked; during a flight, just the
+// stops being left and approached.
+function showOnly(...indices) {
+  stations.forEach((s, i) => (s.group.visible = indices.includes(i)));
+}
+
+// Compile shaders with everything visible (including the table's spotlight),
+// so showing/hiding stops later never stalls on a shader recompile.
+renderer.compile(scene, camera);
+
 const juice = createJuice(isSmallScreen ? 160 : 260);
 juice.setPixelRatio(renderer.getPixelRatio());
 scene.add(juice.points);
 
 const dust = createDust({ count: isSmallScreen ? 350 : 600 });
 scene.add(dust.object);
+
+// Ambient white motes around whichever stop we're parked at.
+const motes = createMotes(isSmallScreen ? 200 : 350);
+motes.setPixelRatio(renderer.getPixelRatio());
+scene.add(motes.points);
 
 /* --------------------------------- Framing --------------------------------- */
 
@@ -166,6 +185,8 @@ function updateFlight(time, dt) {
 }
 
 function flyToStation(index) {
+  showOnly(current, index);
+  voidTarget.set('#000000');
   const from = camera.position.clone();
   const cur = stations[current];
   const next = stations[index];
@@ -189,6 +210,8 @@ function flyToStation(index) {
 }
 
 function introFlight() {
+  showOnly(0);
+  voidTarget.set('#000000');
   const view = viewFor(stations[0]);
   const start = view.pos.clone().add(new THREE.Vector3(30, 40, 560));
   camera.position.copy(start);
@@ -206,6 +229,7 @@ function introFlight() {
 
 // From the last fruit, punch forward into the void, flash, and fly back in.
 function hyperjump() {
+  voidTarget.set('#000000');
   const from = camera.position.clone();
   const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
   const lift = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
@@ -285,6 +309,9 @@ function hideCard() {
 
 function arrive(index) {
   current = index;
+  showOnly(index);
+  voidTarget.set(stations[index].voidColor ?? '#000000');
+  motes.placeAt(stations[index].position, stations[index].radius);
   Object.assign(orbit, { yaw: 0, pitch: 0, targetYaw: 0, targetPitch: 0 });
   arrivedAt = clock.elapsedTime;
   velocity.set(0, 0, 0);
@@ -473,6 +500,7 @@ function onResize() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(w, h, false);
   juice.setPixelRatio(renderer.getPixelRatio());
+  motes.setPixelRatio(renderer.getPixelRatio());
 }
 window.addEventListener('resize', onResize);
 
@@ -512,9 +540,12 @@ function tick() {
     s.group.rotation.set(r.tiltX.x, 0, r.tiltZ.x);
     s.group.scale.set(1 - r.squash.x * 0.5, 1 + r.squash.x, 1 - r.squash.x * 0.5);
     s.group.position.y = s.position.y + Math.sin(time * 0.8 + s.position.x) * 0.4 + r.hop.x;
-    s.update?.(time, dt);
+    if (s.group.visible) s.update?.(time, dt);
   }
   juice.update(dt);
+  voidColor.lerp(voidTarget, 1 - Math.exp(-dt * 2.5));
+  // Motes only while parked; they fade out the moment a flight begins.
+  motes.update(time, dt, !flight && !afterOrbitReset);
 
   if (hoverEvent && !pointerDown) {
     canvas.style.cursor = pickFruit(hoverEvent.clientX, hoverEvent.clientY) ? 'pointer' : '';

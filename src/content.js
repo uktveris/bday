@@ -7,6 +7,7 @@
 export const FRUITS = [
   {
     kind: 'watermelon',
+    voidColor: '#0c2a12', // background while parked here (dark green)
     name: 'Watermelon',
     accent: '#7ed957',
     kicker: 'Stop 1 of 4',
@@ -16,6 +17,7 @@ export const FRUITS = [
   },
   {
     kind: 'throne',
+    voidColor: '#6e1f4c', // background while parked here (pink)
     name: 'Throne',
     accent: '#ff7ac0',
     kicker: 'Stop 2 of 4',
@@ -25,6 +27,7 @@ export const FRUITS = [
   },
   {
     kind: 'apple',
+    voidColor: '#3a080c', // background while parked here (dark red)
     name: 'Apple',
     accent: '#ff4d5e',
     kicker: 'Stop 3 of 4',
@@ -34,6 +37,7 @@ export const FRUITS = [
   },
   {
     kind: 'table',
+    voidColor: '#2a1050', // background while parked here (violet)
     name: 'Table',
     accent: '#ff7ac0',
     kicker: 'Stop 4 of 4',
