@@ -1,7 +1,7 @@
 // Text for each stop, in journey order. On the fruits, `title` and `text` are
 // printed onto the fruit and auto-wrapped to its shape (shorter text = bigger
 // letters). On the throne, only `title` is used: it's spelled out in crystals,
-// so keep it to a few short words.
+// so keep it to a few short words. The table uses `apronTexts` and `lightText`.
 // `kicker` and `button` appear in the bar below.
 export const FRUITS = [
   {
@@ -29,15 +29,21 @@ export const FRUITS = [
     kicker: 'Stop 3 of 4',
     title: 'A crisp red world',
     text: 'An apple floating in the void. It keeps the doctor away, wherever you are.',
-    button: 'Fly to the strawberry',
+    button: 'Fly to the table',
   },
   {
-    kind: 'strawberry',
-    name: 'Strawberry',
-    accent: '#ff5f8f',
+    kind: 'table',
+    name: 'Table',
+    accent: '#ff7ac0',
     kicker: 'Stop 4 of 4',
+    // Not shown on the table (read out to screen readers only).
     title: 'You made it!',
-    text: 'A sweet little end to the journey. Thanks for flying with us.',
+    text: 'Thanks for flying with us.',
+    // Crystal text on each plank between the legs: front, right, back, left.
+    // The front and right ones face the viewer; tap the table to spin it.
+    apronTexts: ['You made it!', 'So fabulous', 'Pure glam', 'Sweet dreams'],
+    // Glowing text projected onto the platform by the light under the top.
+    lightText: 'Stay Juicy',
     button: 'Start the journey again',
   },
 ];

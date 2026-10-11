@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createTable } from './table.js';
 import { createThrone } from './throne.js';
 
 // All objects are built from code (lathe/sphere geometry + canvas textures),
@@ -129,105 +130,6 @@ function createApple() {
   return { group, body, radius: 11, juice: '#ffe9a8' };
 }
 
-/* -------------------------------- Strawberry ------------------------------- */
-
-function createStrawberry() {
-  const H = 11;
-  const N = 48;
-  const profile = [];
-  for (let i = 0; i <= N; i++) {
-    const t = i / N;
-    const x = 7.2 * Math.pow(t, 0.75) * Math.sqrt(Math.max(0, 1 - Math.pow(t, 6)));
-    const y = -H * 0.6 + t * H;
-    profile.push(new THREE.Vector2(x, y));
-  }
-
-  const [c, ctx] = makeCanvas(64, 256);
-  const g = ctx.createLinearGradient(0, 0, 0, 256);
-  g.addColorStop(0, '#f2a27c');
-  g.addColorStop(0.08, '#e43b33');
-  g.addColorStop(0.55, '#d11a28');
-  g.addColorStop(1, '#9e0f1c');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 64, 256);
-
-  const mat = new THREE.MeshPhysicalMaterial({
-    map: colorTexture(c),
-    roughness: 0.32,
-    clearcoat: 0.7,
-    clearcoatRoughness: 0.25,
-  });
-
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.LatheGeometry(profile, 64), mat);
-  group.add(body);
-
-  // Seeds: evenly spread over the surface using an area-weighted golden spiral.
-  const cum = [0];
-  for (let i = 1; i < profile.length; i++) {
-    const a = profile[i - 1];
-    const b = profile[i];
-    cum.push(cum[i - 1] + ((a.x + b.x) / 2) * a.distanceTo(b));
-  }
-  const total = cum[cum.length - 1];
-  const seedCount = 220;
-  const seeds = new THREE.InstancedMesh(
-    new THREE.SphereGeometry(0.17, 6, 4),
-    new THREE.MeshStandardMaterial({ color: '#efd45a', roughness: 0.5 }),
-    seedCount,
-  );
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const up = new THREE.Vector3(0, 1, 0);
-  const scale = new THREE.Vector3(1, 1.9, 1);
-  const pos = new THREE.Vector3();
-  const tangent = new THREE.Vector3();
-  let placed = 0;
-  for (let k = 0; k < seedCount; k++) {
-    const target = total * (0.04 + 0.86 * ((k + 0.5) / seedCount));
-    let i = 1;
-    while (i < cum.length - 1 && cum[i] < target) i++;
-    const f = (target - cum[i - 1]) / (cum[i] - cum[i - 1]);
-    const a = profile[i - 1];
-    const b = profile[i];
-    const px = a.x + (b.x - a.x) * f;
-    const py = a.y + (b.y - a.y) * f;
-    const phi = k * 2.399963;
-    // Lathe maps (x, y) -> (x sin phi, y, x cos phi)
-    pos.set(px * Math.sin(phi), py, px * Math.cos(phi));
-    const dx = b.x - a.x;
-    tangent.set(dx * Math.sin(phi), b.y - a.y, dx * Math.cos(phi)).normalize();
-    q.setFromUnitVectors(up, tangent);
-    m.compose(pos, q, scale);
-    seeds.setMatrixAt(placed++, m);
-  }
-  group.add(seeds);
-
-  // Calyx
-  const leafMat = leafMaterial();
-  const leafGeo = leafGeometry(4.6, 1.5);
-  const top = profile[profile.length - 1].y;
-  for (let i = 0; i < 8; i++) {
-    const leaf = new THREE.Mesh(leafGeo, leafMat);
-    leaf.position.y = top - 0.15;
-    leaf.rotation.order = 'YXZ';
-    leaf.rotation.set(-Math.PI / 2 - 0.25 + rand(-0.1, 0.1), (i / 8) * Math.PI * 2 + rand(-0.15, 0.15), 0);
-    group.add(leaf);
-  }
-  const stem = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.3, 0.45, 2.6, 8),
-    new THREE.MeshStandardMaterial({ color: '#4c8a33', roughness: 0.7 }),
-  );
-  stem.position.set(0, top + 1.1, 0);
-  stem.rotation.z = 0.15;
-  group.add(stem);
-
-  group.position.y = 0.6;
-  group.rotation.z = -0.15;
-  // Seeds stick out ~0.17, so the label floats just above them.
-  return { group, body, radius: 9, labelLift: 0.22, juice: '#ff2d55' };
-}
-
 /* -------------------------------- Watermelon ------------------------------- */
 
 function createWatermelon() {
@@ -286,7 +188,7 @@ function createWatermelon() {
 const BUILDERS = {
   throne: createThrone,
   apple: createApple,
-  strawberry: createStrawberry,
+  table: createTable,
   watermelon: createWatermelon,
 };
 

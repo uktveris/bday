@@ -344,7 +344,7 @@ function pickFruit(clientX, clientY) {
 
 function poke(station, hit) {
   const r = station.react;
-  const weight = 10 / station.radius; // the big watermelon reacts less
+  const weight = Math.max(0.6, 10 / station.radius); // bigger things react less
   const local = hit.point.clone().sub(station.group.position).divideScalar(station.radius);
 
   r.squash.v -= 4.5 * weight;

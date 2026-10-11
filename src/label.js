@@ -2,9 +2,8 @@ import * as THREE from 'three';
 import { DecalGeometry } from 'three/examples/jsm/geometries/DecalGeometry.js';
 
 // Prints a title + message onto the front of a fruit as a decal. Lines are
-// wrapped to the fruit's actual silhouette (found by raycasting), so text
-// narrows toward the top and bottom of round fruit and follows odd shapes
-// like the strawberry.
+// wrapped to the fruit's actual silhouette (from its vertices), so text
+// narrows toward the top and bottom of round fruit and follows their shape.
 
 const CANVAS = 1024;
 const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
@@ -52,10 +51,10 @@ export function addLabel(fruit, { title, text }) {
   const depth = Math.min(size.z, S) * 0.75;
   const geo = new DecalGeometry(body, point, new THREE.Euler(0, 0, 0), new THREE.Vector3(S, S, depth));
 
-  // Lift the decal slightly off the surface (strawberry seeds poke out).
+  // Lift the decal slightly off the surface.
   const pos = geo.attributes.position;
   const nrm = geo.attributes.normal;
-  const lift = fruit.labelLift ?? 0.05;
+  const lift = 0.05;
   for (let i = 0; i < pos.count; i++) {
     pos.setXYZ(i, pos.getX(i) + nrm.getX(i) * lift, pos.getY(i) + nrm.getY(i) * lift, pos.getZ(i) + nrm.getZ(i) * lift);
   }
