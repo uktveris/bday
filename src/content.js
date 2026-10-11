@@ -1,4 +1,6 @@
-// Text shown next to each fruit, in journey order. Edit freely.
+// Text for each fruit, in journey order. `title` and `text` are printed onto
+// the fruit itself and auto-wrapped to its shape (shorter text = bigger letters).
+// `kicker` and `button` appear in the bar below.
 export const FRUITS = [
   {
     kind: 'orange',

@@ -116,7 +116,7 @@ function createOrange() {
   group.add(leaf);
 
   group.rotation.x = 0.25;
-  return { group, radius: r * 1.05, spin: 0.25 };
+  return { group, body, radius: r * 1.05, juice: '#ffad2e' };
 }
 
 /* ---------------------------------- Apple ---------------------------------- */
@@ -174,7 +174,8 @@ function createApple() {
   });
 
   const group = new THREE.Group();
-  group.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 72), mat));
+  const body = new THREE.Mesh(new THREE.LatheGeometry(pts, 72), mat);
+  group.add(body);
 
   const brown = new THREE.MeshStandardMaterial({ color: '#5a3a1c', roughness: 0.9 });
   const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.35, 4.2, 8), brown);
@@ -189,7 +190,7 @@ function createApple() {
   group.add(leaf);
 
   group.rotation.z = 0.12;
-  return { group, radius: 11, spin: 0.3 };
+  return { group, body, radius: 11, juice: '#ffe9a8' };
 }
 
 /* -------------------------------- Strawberry ------------------------------- */
@@ -222,7 +223,8 @@ function createStrawberry() {
   });
 
   const group = new THREE.Group();
-  group.add(new THREE.Mesh(new THREE.LatheGeometry(profile, 64), mat));
+  const body = new THREE.Mesh(new THREE.LatheGeometry(profile, 64), mat);
+  group.add(body);
 
   // Seeds: evenly spread over the surface using an area-weighted golden spiral.
   const cum = [0];
@@ -286,7 +288,8 @@ function createStrawberry() {
 
   group.position.y = 0.6;
   group.rotation.z = -0.15;
-  return { group, radius: 9, spin: 0.35 };
+  // Seeds stick out ~0.17, so the label floats just above them.
+  return { group, body, radius: 9, labelLift: 0.22, juice: '#ff2d55' };
 }
 
 /* -------------------------------- Watermelon ------------------------------- */
@@ -341,7 +344,7 @@ function createWatermelon() {
   inner.rotation.z = Math.PI / 2 - 0.35;
   const group = new THREE.Group();
   group.add(inner);
-  return { group, radius: 15, spin: 0.18 };
+  return { group, body, radius: 15, juice: '#ff4d6d' };
 }
 
 const BUILDERS = {
@@ -353,8 +356,11 @@ const BUILDERS = {
 
 export function createFruit(kind) {
   const fruit = BUILDERS[kind]();
-  // Wrap so the idle spin happens around world Y regardless of each fruit's tilt.
+  // holder: position, tap tilt/squash/hop.  pivot: idle sway + tap spin around
+  // world Y, regardless of each fruit's own tilt. The label goes on the pivot.
   const holder = new THREE.Group();
-  holder.add(fruit.group);
-  return { group: holder, radius: fruit.radius, spin: fruit.spin };
+  const pivot = new THREE.Group();
+  pivot.add(fruit.group);
+  holder.add(pivot);
+  return { ...fruit, group: holder, pivot };
 }

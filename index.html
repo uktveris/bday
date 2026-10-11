@@ -16,8 +16,10 @@
 
     <section id="card" class="card is-hidden" aria-live="polite">
       <p class="card__kicker"></p>
-      <h1 class="card__title"></h1>
-      <p class="card__text"></p>
+      <!-- Printed on the fruit itself; kept here for screen readers. -->
+      <h1 class="card__title sr-only"></h1>
+      <p class="card__text sr-only"></p>
+      <p class="card__hint">Psst, try tapping the fruit</p>
       <button class="card__btn" type="button"></button>
     </section>
 

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { FRUITS } from './content.js';
 import { createFruit } from './fruits.js';
+import { createJuice } from './juice.js';
+import { addLabel } from './label.js';
 import { createPlanets, createSky, createStarfield } from './space.js';
 
 const BASE_FOV = 45;
@@ -62,10 +64,16 @@ scene.add(planets.group);
 
 const stations = FRUITS.map((content, i) => {
   const fruit = createFruit(content.kind);
+  // Label is projected while the fruit is still at the origin, facing +Z.
+  addLabel(fruit, content);
   fruit.group.position.copy(LAYOUT[i]);
   scene.add(fruit.group);
-  return { ...content, ...fruit, position: LAYOUT[i] };
+  return { ...content, ...fruit, position: LAYOUT[i], react: createReaction() };
 });
+
+const juice = createJuice(isSmallScreen ? 160 : 260);
+juice.setPixelRatio(renderer.getPixelRatio());
+scene.add(juice.points);
 
 const stars = createStarfield({
   count: isSmallScreen ? 3500 : 6500,
@@ -78,25 +86,25 @@ scene.add(stars.group);
 
 /* --------------------------------- Framing --------------------------------- */
 
-// Camera spot for a fruit. On landscape screens the fruit sits left of centre
-// (card on the right); on portrait it sits in the upper half (card below).
+// Camera spot for a fruit: centred horizontally, nudged up a little to leave
+// room for the button bar at the bottom. The fruit fills most of the screen
+// so the text printed on it stays readable on phones.
 function viewFor(station) {
   const aspect = camera.aspect;
   const r = station.radius;
   const tan = Math.tan(THREE.MathUtils.degToRad(BASE_FOV / 2));
   let d;
-  let sx = 0;
-  let sy = 0;
+  let sy;
   if (aspect >= 1) {
-    // fruit spans ~50% of the height, at most 36% of the width
-    d = Math.max(r / (0.5 * tan), r / (0.36 * aspect * tan));
-    sx = 0.2 * 2 * d * tan * aspect;
+    // fruit spans ~64% of the height, at most 60% of the width
+    d = Math.max(r / (0.64 * tan), r / (0.6 * aspect * tan));
+    sy = -0.05 * 2 * d * tan;
   } else {
-    // fruit spans ~68% of the width, at most 40% of the height
-    d = Math.max(r / (0.68 * aspect * tan), r / (0.4 * tan));
-    sy = -0.22 * 2 * d * tan;
+    // fruit spans ~86% of the width, at most 58% of the height
+    d = Math.max(r / (0.86 * aspect * tan), r / (0.58 * tan));
+    sy = -0.07 * 2 * d * tan;
   }
-  const offset = new THREE.Vector3(sx, sy, 0);
+  const offset = new THREE.Vector3(0, sy, 0);
   const target = station.position.clone().add(offset);
   return { pos: target.clone().add(new THREE.Vector3(0, 0, d)), target, d };
 }
@@ -300,6 +308,96 @@ button.addEventListener('click', () => {
   else flyToStation(current + 1);
 });
 
+/* ------------------------------- Tap reactions ------------------------------ */
+
+// Every reaction is a damped spring that settles back to 0, layered on top of
+// the idle sway/bob, so a poked fruit always returns to its normal idle loop.
+function spring(x = 0) {
+  return { x, v: 0, target: x };
+}
+
+function createReaction() {
+  return { squash: spring(), tiltX: spring(), tiltZ: spring(), hop: spring(), spin: spring() };
+}
+
+function stepSpring(s, k, zeta, dt) {
+  const c = 2 * zeta * Math.sqrt(k);
+  s.v += (-k * (s.x - s.target) - c * s.v) * dt;
+  s.x += s.v * dt;
+}
+
+function updateReaction(r, dt) {
+  // Substep so stiff springs stay stable on slow frames.
+  const steps = Math.ceil(dt / (1 / 120));
+  const h = dt / steps;
+  for (let i = 0; i < steps; i++) {
+    stepSpring(r.squash, 240, 0.16, h);
+    stepSpring(r.tiltX, 70, 0.22, h);
+    stepSpring(r.tiltZ, 70, 0.22, h);
+    stepSpring(r.hop, 45, 0.3, h);
+    stepSpring(r.spin, 26, 0.55, h);
+  }
+  r.squash.x = THREE.MathUtils.clamp(r.squash.x, -0.32, 0.32);
+  // Once a spin has settled on a whole turn, fold it back to 0.
+  if (r.spin.target !== 0 && Math.abs(r.spin.x - r.spin.target) < 1e-3 && Math.abs(r.spin.v) < 1e-3) {
+    r.spin.x = r.spin.target = 0;
+    r.spin.v = 0;
+  }
+}
+
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+const hint = card.querySelector('.card__hint');
+
+function pickFruit(clientX, clientY) {
+  if (flight) return null;
+  ndc.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ndc, camera);
+  return raycaster.intersectObject(stations[current].group, true)[0] ?? null;
+}
+
+function poke(station, hit) {
+  const r = station.react;
+  const weight = 10 / station.radius; // the big watermelon reacts less
+  const local = hit.point.clone().sub(station.group.position).divideScalar(station.radius);
+
+  r.squash.v -= 4.5 * weight;
+  r.hop.v += 9 * weight;
+  // Push the tapped side away from the viewer.
+  r.tiltX.v -= local.y * 4 * weight;
+  r.tiltZ.v -= local.x * 2.5 * weight;
+  // Off-centre taps also twirl the fruit a full turn (or more, if tapped again).
+  if (Math.abs(local.x) > 0.3) r.spin.target += Math.sign(local.x) * Math.PI * 2;
+
+  const dir = local.clone().normalize();
+  dir.z = Math.max(dir.z, 0.4); // spray toward the camera
+  juice.burst(hit.point, dir.normalize(), station.juice, isSmallScreen ? 20 : 30);
+
+  navigator.vibrate?.(12);
+  hint?.classList.add('is-hidden');
+}
+
+let pointerDown = null;
+canvas.addEventListener('pointerdown', (e) => {
+  pointerDown = { x: e.clientX, y: e.clientY, t: performance.now() };
+});
+canvas.addEventListener('pointerup', (e) => {
+  if (!pointerDown) return;
+  const moved = Math.hypot(e.clientX - pointerDown.x, e.clientY - pointerDown.y);
+  const quick = performance.now() - pointerDown.t < 600;
+  pointerDown = null;
+  if (moved > 12 || !quick) return;
+  const hit = pickFruit(e.clientX, e.clientY);
+  if (hit) poke(stations[current], hit);
+});
+canvas.addEventListener('pointercancel', () => (pointerDown = null));
+
+// Pointer cursor when hovering a fruit (mouse only, at most once per frame).
+let hoverEvent = null;
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'mouse') hoverEvent = e;
+});
+
 /* ---------------------------------- Loop ----------------------------------- */
 
 function onResize() {
@@ -310,6 +408,7 @@ function onResize() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(w, h, false);
   stars.setPixelRatio(renderer.getPixelRatio());
+  juice.setPixelRatio(renderer.getPixelRatio());
 }
 window.addEventListener('resize', onResize);
 
@@ -337,9 +436,20 @@ function tick() {
   stars.update(time, velocity, reducedMotion ? 0 : Math.min(1, speedNorm * 1.4));
   sky.position.copy(camera.position);
   planets.update(dt);
-  for (const s of stations) {
-    s.group.rotation.y += dt * s.spin;
-    s.group.position.y = s.position.y + Math.sin(time * 0.8 + s.position.x) * 0.4;
+  for (const [i, s] of stations.entries()) {
+    const r = s.react;
+    updateReaction(r, dt);
+    // Sway rather than spin, so the printed text keeps facing the viewer.
+    s.pivot.rotation.y = Math.sin(time * 0.45 + i * 1.7) * 0.28 + r.spin.x;
+    s.group.rotation.set(r.tiltX.x, 0, r.tiltZ.x);
+    s.group.scale.set(1 - r.squash.x * 0.5, 1 + r.squash.x, 1 - r.squash.x * 0.5);
+    s.group.position.y = s.position.y + Math.sin(time * 0.8 + s.position.x) * 0.4 + r.hop.x;
+  }
+  juice.update(dt);
+
+  if (hoverEvent) {
+    canvas.style.cursor = pickFruit(hoverEvent.clientX, hoverEvent.clientY) ? 'pointer' : '';
+    hoverEvent = null;
   }
 
   renderer.render(scene, camera);
