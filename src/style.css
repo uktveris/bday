@@ -1,5 +1,5 @@
 :root {
-  --bg: #05050f;
+  --bg: #000000;
   --text: #f4f3ff;
   --muted: #b9b8d6;
   --glass: rgba(14, 14, 34, 0.58);
@@ -37,7 +37,7 @@ body {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(circle at center, #ffffff 0%, #c9c2ff 35%, #2a1d5c 100%);
+  background: radial-gradient(circle at center, #ffffff 0%, #d8d8d8 40%, #000000 100%);
   opacity: 0;
 }
 

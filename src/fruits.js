@@ -1,6 +1,7 @@
 import * as THREE from 'three';
+import { createThrone } from './throne.js';
 
-// All fruits are built from code (lathe/sphere geometry + canvas textures),
+// All objects are built from code (lathe/sphere geometry + canvas textures),
 // so there are no model or image files to download.
 
 function makeCanvas(w, h) {
@@ -13,12 +14,6 @@ function makeCanvas(w, h) {
 function colorTexture(canvas) {
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
-}
-
-function dataTexture(canvas) {
-  const tex = new THREE.CanvasTexture(canvas);
   tex.anisotropy = 4;
   return tex;
 }
@@ -59,65 +54,6 @@ function leafGeometry(length, width) {
 
 const leafMaterial = () =>
   new THREE.MeshStandardMaterial({ color: '#3f9a3a', roughness: 0.55, side: THREE.DoubleSide });
-
-/* ---------------------------------- Orange --------------------------------- */
-
-function createOrange() {
-  const r = 10;
-  const W = 1024;
-  const H = 512;
-
-  const [c, ctx] = makeCanvas(W, H);
-  ctx.fillStyle = '#f7851d';
-  ctx.fillRect(0, 0, W, H);
-  for (let i = 0; i < 70; i++) {
-    blob(ctx, rand(0, W), rand(0, H), rand(40, 140), Math.random() < 0.5 ? 'rgba(255,170,60,0.25)' : 'rgba(220,100,15,0.22)');
-  }
-
-  const [b, bctx] = makeCanvas(W, H);
-  bctx.fillStyle = '#9a9a9a';
-  bctx.fillRect(0, 0, W, H);
-
-  // Peel pores: darker on the colour map, recessed on the bump map.
-  for (let i = 0; i < 16000; i++) {
-    const x = rand(0, W);
-    const y = rand(0, H);
-    const pr = rand(0.7, 1.8);
-    dot(ctx, x, y, pr, 'rgba(190,85,10,0.28)');
-    dot(bctx, x, y, pr, 'rgba(30,30,30,0.55)');
-  }
-
-  const mat = new THREE.MeshStandardMaterial({
-    map: colorTexture(c),
-    bumpMap: dataTexture(b),
-    bumpScale: 2,
-    roughness: 0.6,
-  });
-
-  const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.SphereGeometry(r, 96, 64), mat);
-  body.scale.set(1, 0.94, 1);
-  group.add(body);
-
-  const green = new THREE.MeshStandardMaterial({ color: '#5c7a2a', roughness: 0.8 });
-  const calyx = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.4, 0.5, 10), green);
-  calyx.position.y = r * 0.94;
-  group.add(calyx);
-
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.6, 8), green);
-  stem.position.set(0.1, r * 0.94 + 0.9, 0);
-  stem.rotation.z = -0.2;
-  group.add(stem);
-
-  const leaf = new THREE.Mesh(leafGeometry(8, 2.6), leafMaterial());
-  leaf.position.set(0.2, r * 0.94 + 1.4, 0);
-  leaf.rotation.order = 'YXZ';
-  leaf.rotation.set(-Math.PI / 2 + 0.45, 0.9, 0);
-  group.add(leaf);
-
-  group.rotation.x = 0.25;
-  return { group, body, radius: r * 1.05, juice: '#ffad2e' };
-}
 
 /* ---------------------------------- Apple ---------------------------------- */
 
@@ -348,14 +284,14 @@ function createWatermelon() {
 }
 
 const BUILDERS = {
-  orange: createOrange,
+  throne: createThrone,
   apple: createApple,
   strawberry: createStrawberry,
   watermelon: createWatermelon,
 };
 
-export function createFruit(kind) {
-  const fruit = BUILDERS[kind]();
+export function createFruit(kind, options = {}) {
+  const fruit = BUILDERS[kind](options);
   // holder: position, tap tilt/squash/hop.  pivot: idle sway + tap spin around
   // world Y, regardless of each fruit's own tilt. The label goes on the pivot.
   const holder = new THREE.Group();

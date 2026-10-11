@@ -1,27 +1,20 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { FRUITS } from './content.js';
+import { createDust } from './dust.js';
 import { createFruit } from './fruits.js';
 import { createJuice } from './juice.js';
 import { addLabel } from './label.js';
-import { createPlanets, createSky, createStarfield } from './space.js';
 
 const BASE_FOV = 45;
 const MAX_FOV_KICK = 22;
 
-// Where each fruit floats in space, in journey order.
+// Where each fruit floats in the void, in journey order.
 const LAYOUT = [
   new THREE.Vector3(0, 0, 0),
   new THREE.Vector3(140, 40, -600),
   new THREE.Vector3(-120, -30, -1200),
   new THREE.Vector3(60, 60, -1800),
-];
-
-const PLANETS = [
-  { position: new THREE.Vector3(-380, 120, -260), radius: 60, colors: ['#9c5b3a', '#c98b5a', '#e7c49a', '#b57446'], ring: '#e9d2a8', tilt: 0.3 },
-  { position: new THREE.Vector3(-170, -210, -470), radius: 28, colors: ['#5a5a66', '#8b8b96', '#6d6a72'] },
-  { position: new THREE.Vector3(430, -170, -920), radius: 90, colors: ['#1f3a7a', '#3f6fc0', '#8fb6ea', '#2a4f99'] },
-  { position: new THREE.Vector3(-460, 210, -1520), radius: 45, colors: ['#4a2a6e', '#8a5ab8', '#c9a3e8'], ring: '#c9a3e8', tilt: -0.4 },
-  { position: new THREE.Vector3(330, -160, -2450), radius: 150, colors: ['#7a3b2a', '#c0703f', '#e8b07a', '#a35232'], tilt: 0.15 },
 ];
 
 const isSmallScreen = matchMedia('(max-width: 768px), (pointer: coarse)').matches;
@@ -47,25 +40,24 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.1, 6000);
+scene.background = new THREE.Color('#000000');
+const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.1, 3000);
 
-const sunDir = new THREE.Vector3(-1, 0.8, 0.9).normalize();
 const sun = new THREE.DirectionalLight('#fff3e0', 2.8);
-sun.position.copy(sunDir);
+sun.position.set(-1, 0.8, 0.9);
 const rim = new THREE.DirectionalLight('#7c95ff', 1.4);
 rim.position.set(1, 0.4, -1);
 scene.add(sun, rim, new THREE.HemisphereLight('#9fb4ff', '#1b1030', 0.55));
 
-const sky = createSky(sunDir);
-scene.add(sky);
-
-const planets = createPlanets(PLANETS);
-scene.add(planets.group);
+// Reflections for the throne's gold and crystals (the fruits don't use it).
+const pmrem = new THREE.PMREMGenerator(renderer);
+const envMap = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+pmrem.dispose();
 
 const stations = FRUITS.map((content, i) => {
-  const fruit = createFruit(content.kind);
+  const fruit = createFruit(content.kind, { content, envMap });
   // Label is projected while the fruit is still at the origin, facing +Z.
-  addLabel(fruit, content);
+  if (fruit.labelled !== false) addLabel(fruit, content);
   fruit.group.position.copy(LAYOUT[i]);
   scene.add(fruit.group);
   return { ...content, ...fruit, position: LAYOUT[i], react: createReaction() };
@@ -75,14 +67,8 @@ const juice = createJuice(isSmallScreen ? 160 : 260);
 juice.setPixelRatio(renderer.getPixelRatio());
 scene.add(juice.points);
 
-const stars = createStarfield({
-  count: isSmallScreen ? 3500 : 6500,
-  bounds: new THREE.Box3(new THREE.Vector3(-650, -450, -2700), new THREE.Vector3(650, 450, 700)),
-  // Keep the space between the camera and each fruit clear.
-  avoid: stations.map((s) => ({ center: s.position.clone().add(new THREE.Vector3(0, 0, 50)), radius: 110 })),
-});
-stars.setPixelRatio(renderer.getPixelRatio());
-scene.add(stars.group);
+const dust = createDust({ count: isSmallScreen ? 350 : 600 });
+scene.add(dust.object);
 
 /* --------------------------------- Framing --------------------------------- */
 
@@ -187,7 +173,7 @@ function flyToStation(index) {
   const r = cur.radius;
   const side = Math.sign(next.position.x - cur.position.x) || 1;
 
-  // Swing out past the current fruit, curve through open space,
+  // Swing out past the current fruit, curve through the void,
   // then line up in front of the next fruit.
   const p1 = cur.position.clone().add(new THREE.Vector3(side * r * 2.6, r, viewFor(cur).d * 0.6));
   const p2 = cur.position.clone().add(new THREE.Vector3(side * r * 3.2, r * 1.4, -r * 3));
@@ -218,7 +204,7 @@ function introFlight() {
   });
 }
 
-// From the last fruit, punch forward into hyperspace, flash, and fly back in.
+// From the last fruit, punch forward into the void, flash, and fly back in.
 function hyperjump() {
   const from = camera.position.clone();
   const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -407,7 +393,6 @@ function onResize() {
   camera.updateProjectionMatrix();
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(w, h, false);
-  stars.setPixelRatio(renderer.getPixelRatio());
   juice.setPixelRatio(renderer.getPixelRatio());
 }
 window.addEventListener('resize', onResize);
@@ -433,9 +418,9 @@ function tick() {
     camera.updateProjectionMatrix();
   }
 
-  stars.update(time, velocity, reducedMotion ? 0 : Math.min(1, speedNorm * 1.4));
-  sky.position.copy(camera.position);
-  planets.update(dt);
+  // Dust fades in with speed; invisible while parked at a fruit.
+  dust.update(camera.position, velocity, reducedMotion ? 0 : Math.pow(speedNorm, 1.2) * 1.0);
+
   for (const [i, s] of stations.entries()) {
     const r = s.react;
     updateReaction(r, dt);
@@ -444,6 +429,7 @@ function tick() {
     s.group.rotation.set(r.tiltX.x, 0, r.tiltZ.x);
     s.group.scale.set(1 - r.squash.x * 0.5, 1 + r.squash.x, 1 - r.squash.x * 0.5);
     s.group.position.y = s.position.y + Math.sin(time * 0.8 + s.position.x) * 0.4 + r.hop.x;
+    s.update?.(time, dt);
   }
   juice.update(dt);
 
