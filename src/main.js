@@ -267,6 +267,10 @@ function showCard(index) {
   text.textContent = s.text;
   button.textContent = s.button;
   button.disabled = false;
+  // A stop can have its own hint (e.g. the table's curtains); otherwise show
+  // the generic one until the user has tapped or dragged something.
+  hint.textContent = s.hint ?? DEFAULT_HINT;
+  hint.classList.toggle('is-hidden', !s.hint && interacted);
   card.classList.remove('is-hidden');
   dots.forEach((d, i) => {
     d.classList.toggle('is-active', i === index);
@@ -281,6 +285,7 @@ function hideCard() {
 
 function arrive(index) {
   current = index;
+  Object.assign(orbit, { yaw: 0, pitch: 0, targetYaw: 0, targetPitch: 0 });
   arrivedAt = clock.elapsedTime;
   velocity.set(0, 0, 0);
   showCard(index);
@@ -288,10 +293,13 @@ function arrive(index) {
 }
 
 button.addEventListener('click', () => {
-  if (flight) return;
+  if (flight || afterOrbitReset) return;
   hideCard();
-  if (current === stations.length - 1) hyperjump();
-  else flyToStation(current + 1);
+  const go = () => (current === stations.length - 1 ? hyperjump() : flyToStation(current + 1));
+  // If the user dragged round the object, swing back to the front first so
+  // the flight path doesn't cut through it.
+  if (Math.abs(orbit.yaw) + Math.abs(orbit.pitch) < 0.02) go();
+  else resetOrbit(go);
 });
 
 /* ------------------------------- Tap reactions ------------------------------ */
@@ -334,12 +342,23 @@ function updateReaction(r, dt) {
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
 const hint = card.querySelector('.card__hint');
+const DEFAULT_HINT = hint.textContent;
+let interacted = false;
+function markInteracted() {
+  interacted = true;
+  hint.classList.add('is-hidden');
+}
 
 function pickFruit(clientX, clientY) {
   if (flight) return null;
   ndc.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
-  return raycaster.intersectObject(stations[current].group, true)[0] ?? null;
+  // The raycaster doesn't skip hidden objects (e.g. the table's flown-off lid).
+  const shown = (o) => {
+    for (; o; o = o.parent) if (!o.visible) return false;
+    return true;
+  };
+  return raycaster.intersectObject(stations[current].group, true).find((h) => shown(h.object)) ?? null;
 }
 
 function poke(station, hit) {
@@ -360,29 +379,89 @@ function poke(station, hit) {
   juice.burst(hit.point, dir.normalize(), station.juice, isSmallScreen ? 20 : 30);
 
   navigator.vibrate?.(12);
-  hint?.classList.add('is-hidden');
 }
 
+/* ------------------------------- Drag to orbit ------------------------------ */
+
+// While parked at a stop, dragging orbits the camera around the object.
+// Yaw is free; pitch is clamped so the camera never dips under the object.
+const ORBIT_SPEED = 0.0065; // radians per pixel dragged
+const ORBIT_PITCH_MIN = -0.05; // about level
+const ORBIT_PITCH_MAX = 1.2; // ~70 degrees, looking down from above
+const orbit = { yaw: 0, pitch: 0, targetYaw: 0, targetPitch: 0 };
+let afterOrbitReset = null;
+const orbitQ = new THREE.Quaternion();
+const orbitEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+function resetOrbit(then) {
+  // Unwrap so we swing back the short way round.
+  orbit.yaw = THREE.MathUtils.euclideanModulo(orbit.yaw + Math.PI, Math.PI * 2) - Math.PI;
+  orbit.targetYaw = 0;
+  orbit.targetPitch = 0;
+  afterOrbitReset = then;
+}
+
+function updateOrbit(dt) {
+  const k = 1 - Math.exp(-dt * 12);
+  orbit.yaw += (orbit.targetYaw - orbit.yaw) * k;
+  orbit.pitch += (orbit.targetPitch - orbit.pitch) * k;
+  if (afterOrbitReset && Math.abs(orbit.yaw) < 0.01 && Math.abs(orbit.pitch) < 0.01) {
+    orbit.yaw = orbit.pitch = 0;
+    const then = afterOrbitReset;
+    afterOrbitReset = null;
+    then();
+  }
+  return orbitQ.setFromEuler(orbitEuler.set(-orbit.pitch, orbit.yaw, 0));
+}
+
+// One pointer at a time: a short, still press is a tap (poke the object);
+// moving more than a few pixels turns it into an orbit drag.
 let pointerDown = null;
 canvas.addEventListener('pointerdown', (e) => {
-  pointerDown = { x: e.clientX, y: e.clientY, t: performance.now() };
+  if (pointerDown) return;
+  pointerDown = { id: e.pointerId, x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY, t: performance.now(), dragging: false };
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerType === 'mouse' && !pointerDown) hoverEvent = e;
+  const p = pointerDown;
+  if (!p || e.pointerId !== p.id) return;
+  if (!p.dragging && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 8) {
+    p.dragging = true;
+    canvas.style.cursor = 'grabbing';
+  }
+  if (p.dragging && !flight && !afterOrbitReset) {
+    orbit.targetYaw -= (e.clientX - p.lastX) * ORBIT_SPEED;
+    orbit.targetPitch = THREE.MathUtils.clamp(
+      orbit.targetPitch + (e.clientY - p.lastY) * ORBIT_SPEED,
+      ORBIT_PITCH_MIN,
+      ORBIT_PITCH_MAX,
+    );
+    markInteracted();
+  }
+  p.lastX = e.clientX;
+  p.lastY = e.clientY;
 });
 canvas.addEventListener('pointerup', (e) => {
-  if (!pointerDown) return;
-  const moved = Math.hypot(e.clientX - pointerDown.x, e.clientY - pointerDown.y);
-  const quick = performance.now() - pointerDown.t < 600;
+  const p = pointerDown;
+  if (!p || e.pointerId !== p.id) return;
   pointerDown = null;
-  if (moved > 12 || !quick) return;
+  canvas.style.cursor = '';
+  if (p.dragging || performance.now() - p.t > 600) return;
   const hit = pickFruit(e.clientX, e.clientY);
-  if (hit) poke(stations[current], hit);
+  if (!hit) return;
+  const station = stations[current];
+  // Objects can claim a tap for themselves (the table's curtains do).
+  if (!station.onTap?.(hit)) poke(station, hit);
+  markInteracted();
 });
-canvas.addEventListener('pointercancel', () => (pointerDown = null));
+canvas.addEventListener('pointercancel', (e) => {
+  if (pointerDown?.id === e.pointerId) pointerDown = null;
+  canvas.style.cursor = '';
+});
 
 // Pointer cursor when hovering a fruit (mouse only, at most once per frame).
 let hoverEvent = null;
-canvas.addEventListener('pointermove', (e) => {
-  if (e.pointerType === 'mouse') hoverEvent = e;
-});
 
 /* ---------------------------------- Loop ----------------------------------- */
 
@@ -404,11 +483,15 @@ function tick() {
   if (flight) {
     updateFlight(time, dt);
   } else {
-    // Gentle idle drift in front of the current fruit.
-    const view = viewFor(stations[current]);
+    // Parked at a stop: the framed front view, rotated by any drag-orbit
+    // around the object's centre, plus a gentle idle drift.
+    const s = stations[current];
+    const view = viewFor(s);
+    const q = updateOrbit(dt);
     const amp = Math.min(1, (time - arrivedAt) / 2);
-    camera.position.copy(view.pos).add(new THREE.Vector3(Math.sin(time * 0.5) * 0.5 * amp, Math.sin(time * 0.7) * 0.35 * amp, 0));
-    camera.quaternion.copy(lookQuat(view.pos, view.target));
+    const drift = new THREE.Vector3(Math.sin(time * 0.5) * 0.5 * amp, Math.sin(time * 0.7) * 0.35 * amp, 0);
+    camera.position.copy(view.pos).sub(s.position).add(drift).applyQuaternion(q).add(s.position);
+    camera.quaternion.copy(q).multiply(lookQuat(view.pos, view.target));
     speedNorm = Math.max(0, speedNorm - dt * 2);
   }
 
@@ -433,7 +516,7 @@ function tick() {
   }
   juice.update(dt);
 
-  if (hoverEvent) {
+  if (hoverEvent && !pointerDown) {
     canvas.style.cursor = pickFruit(hoverEvent.clientX, hoverEvent.clientY) ? 'pointer' : '';
     hoverEvent = null;
   }

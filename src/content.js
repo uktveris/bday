@@ -1,7 +1,8 @@
 // Text for each stop, in journey order. On the fruits, `title` and `text` are
 // printed onto the fruit and auto-wrapped to its shape (shorter text = bigger
 // letters). On the throne, only `title` is used: it's spelled out in crystals,
-// so keep it to a few short words. The table uses `apronTexts` and `lightText`.
+// so keep it to a few short words. The table uses `apronTexts`, `lightText`
+// and `bookTitle`.
 // `kicker` and `button` appear in the bar below.
 export const FRUITS = [
   {
@@ -40,10 +41,14 @@ export const FRUITS = [
     title: 'You made it!',
     text: 'Thanks for flying with us.',
     // Crystal text on each plank between the legs: front, right, back, left.
-    // The front and right ones face the viewer; tap the table to spin it.
+    // The table slowly turns, so all four come round to the front.
     apronTexts: ['You made it!', 'So fabulous', 'Pure glam', 'Sweet dreams'],
     // Glowing text projected onto the platform by the light under the top.
     lightText: 'Stay Juicy',
+    // Gold-foil title on the black book in the glass case on top of the table.
+    bookTitle: 'Juicy Secrets',
+    // The book starts hidden behind curtains; this hint shows at this stop.
+    hint: 'Psst, tap the curtains',
     button: 'Start the journey again',
   },
 ];

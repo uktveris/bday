@@ -181,6 +181,7 @@ export function createSparkles(anchors, count = 12, size = 7) {
   return {
     points,
     update(time) {
+      if (anchors.length === 0) return; // nothing to sparkle on (e.g. blank text)
       for (let i = 0; i < count; i++) {
         const t = time * speed[i] + phase[i];
         const n = Math.floor(t);
