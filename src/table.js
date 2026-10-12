@@ -543,6 +543,15 @@ function createCurtains(mat, { W, D, bottom, top }) {
       to = to > 0.5 ? 0 : 1;
       t = 0;
     },
+    // Snap shut (no animation), with the lid back on.
+    reset() {
+      open = from = to = 0;
+      t = 1;
+      for (const h of halves) layoutHalfCurtain(h.geo, h.L, height, 0);
+      lid.position.y = 0;
+      lid.rotation.set(0, 0, 0);
+      lid.visible = true;
+    },
     update(dt) {
       if (t >= 1) return;
       t = Math.min(1, t + dt / DURATION);
@@ -655,7 +664,9 @@ function displayCase(mat, envMap, title) {
     g.add(bar);
   }
 
-  const curtains = createCurtains(mat, { W, D, bottom: plinthH + 0.05, top: plinthH + H + 1.2 });
+  // The rail (and the lid that sits on it) is level with the top of the glass,
+  // so the case reads as one box when the lid is off.
+  const curtains = createCurtains(mat, { W, D, bottom: plinthH + 0.05, top: plinthH + H });
   g.add(curtains.group);
   return { group: g, curtains };
 }
@@ -823,6 +834,10 @@ export function createTable({ content, envMap }) {
       if (!hit.object.userData.toggleCurtains) return false;
       showcase.curtains.toggle();
       return true;
+    },
+    // Restarting the journey hides the book behind its curtains again.
+    reset() {
+      showcase.curtains.reset();
     },
     update(time, dt) {
       scene.rotation.y = START_ANGLE + time * SPIN_SPEED;

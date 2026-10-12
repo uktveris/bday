@@ -10,18 +10,21 @@
   </head>
   <body>
     <canvas id="scene" aria-hidden="true"></canvas>
-    <div id="flash" aria-hidden="true"></div>
-
-    <nav id="progress" aria-label="Journey progress"></nav>
 
     <section id="card" class="card is-hidden" aria-live="polite">
-      <p class="card__kicker"></p>
-      <!-- Printed on the fruit itself; kept here for screen readers. -->
+      <!-- Shown on the objects themselves; kept here for screen readers only. -->
       <h1 class="card__title sr-only"></h1>
       <p class="card__text sr-only"></p>
-      <p class="card__hint">Tap it, or drag to look around</p>
-      <button class="card__btn" type="button"></button>
+      <button class="card__btn" type="button" disabled></button>
     </section>
+
+    <!-- Theatre curtains covering everything until the note is clicked. -->
+    <div id="stage" class="stage">
+      <div class="stage__half stage__half--left"></div>
+      <div class="stage__half stage__half--right"></div>
+      <div class="stage__valance"><div class="stage__swag"></div></div>
+      <button class="stage__note" type="button">Paspausk jei nori paziureti kas cia:D</button>
+    </div>
 
     <div id="fallback" hidden>
       <p>This page needs WebGL to fly you between the fruits. Try a different browser or device.</p>

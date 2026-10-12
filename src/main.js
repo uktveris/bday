@@ -96,7 +96,7 @@ scene.add(motes.points);
 /* --------------------------------- Framing --------------------------------- */
 
 // Camera spot for a fruit: centred horizontally, nudged up a little to leave
-// room for the button bar at the bottom. The fruit fills most of the screen
+// room for the button at the bottom. The fruit fills most of the screen
 // so the text printed on it stays readable on phones.
 function viewFor(station) {
   const aspect = camera.aspect;
@@ -106,10 +106,10 @@ function viewFor(station) {
   let sy;
   if (station.extent) {
     // Flat things with lots of text (the letter) are framed by their real
-    // size: as big as fits between the progress dots and the button bar.
+    // size: as big as fits above the button.
     const { w, h } = station.extent;
-    d = Math.max(w / 2 / (0.94 * aspect * tan), h / 2 / (0.78 * tan));
-    sy = -0.045 * 2 * d * tan;
+    d = Math.max(w / 2 / (0.94 * aspect * tan), h / 2 / (0.82 * tan));
+    sy = -0.055 * 2 * d * tan;
   } else if (aspect >= 1) {
     // fruit spans ~64% of the height, at most 60% of the width
     d = Math.max(r / (0.64 * tan), r / (0.6 * aspect * tan));
@@ -133,8 +133,6 @@ function lookQuat(from, to) {
 /* --------------------------------- Flights --------------------------------- */
 
 const easeInOutCubic = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-const easeInCubic = (t) => t * t * t;
-const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 
 let flight = null;
 let current = 0;
@@ -219,97 +217,67 @@ function flyToStation(index) {
   });
 }
 
-function introFlight() {
-  showOnly(0);
-  voidTarget.set('#000000');
-  const view = viewFor(stations[0]);
-  const start = view.pos.clone().add(new THREE.Vector3(30, 40, 560));
-  camera.position.copy(start);
-  const mid = new THREE.Vector3().lerpVectors(start, view.pos, 0.5).add(new THREE.Vector3(-40, 15, 0));
-  const approach = view.pos.clone().add(new THREE.Vector3(0, 0, view.d * 2));
-  camera.quaternion.copy(lookQuat(start, mid));
-  startFlight({
-    points: [start, mid, approach, view.pos],
-    duration: 3.6,
-    ease: easeOutCubic,
-    endQuat: lookQuat(view.pos, view.target),
-    onDone: () => arrive(0),
-  });
+/* ------------------------------ Theatre curtains ----------------------------- */
+
+// A full-screen curtain (plain HTML/CSS, see style.css) hides everything until
+// its note is clicked, then opens straight onto the first stop. Restarting
+// from the last stop closes it again and resets the journey behind it.
+const stage = document.querySelector('#stage');
+const stageNote = stage.querySelector('.stage__note');
+const STAGE_MS = reducedMotion ? 50 : 1900; // matches --stage-time in style.css
+let stageOpen = false;
+
+function openStage() {
+  if (stageOpen) return;
+  stageOpen = true;
+  stageNote.disabled = true;
+  stage.classList.add('is-open');
+  arrivedAt = clock.elapsedTime;
+  // Bring the button bar in once the curtains are mostly out of the way.
+  setTimeout(() => {
+    showCard(current);
+    button.focus({ preventScroll: true });
+  }, STAGE_MS * 0.55);
 }
 
-// From the last fruit, punch forward into the void, flash, and fly back in.
-function hyperjump() {
-  voidTarget.set('#000000');
-  const from = camera.position.clone();
-  const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-  const lift = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-  const cur = stations[current];
-  const points = [
-    from,
-    from.clone().add(lift.clone().multiplyScalar(cur.radius * 1.8)).addScaledVector(fwd, 30),
-    from.clone().add(lift.clone().multiplyScalar(cur.radius * 2.4)).addScaledVector(fwd, 250),
-    from.clone().add(lift.clone().multiplyScalar(cur.radius * 2.6)).addScaledVector(fwd, 700),
-  ];
-  startFlight({
-    points,
-    duration: 2,
-    ease: easeInCubic,
-    onDone: () => {
-      flashOut();
-      current = 0;
-      introFlight();
-    },
-  });
-  flashIn();
+function closeStage(then) {
+  stageOpen = false;
+  stage.classList.add('is-closing');
+  stage.classList.remove('is-open');
+  setTimeout(() => {
+    then();
+    stage.classList.remove('is-closing');
+    stageNote.disabled = false;
+    stageNote.focus({ preventScroll: true });
+  }, STAGE_MS + 100);
 }
 
-const flash = document.querySelector('#flash');
-function flashIn() {
-  flash.animate([{ opacity: 0 }, { opacity: 0, offset: 0.75 }, { opacity: 1 }], {
-    duration: flight.duration * 1000,
-    easing: 'ease-in',
-    fill: 'forwards',
-  });
+// Back to the first stop, with everything as it was on the first visit.
+function resetJourney() {
+  for (const s of stations) s.reset?.();
+  arrive(0);
+  voidColor.copy(voidTarget);
 }
-function flashOut() {
-  flash.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 900, easing: 'ease-out', fill: 'forwards' });
-}
+
+stageNote.addEventListener('click', openStage);
 
 /* ------------------------------------ UI ----------------------------------- */
 
+// The only on-screen control is one button; the hidden title and text are
+// there for screen readers.
 const card = document.querySelector('#card');
-const kicker = card.querySelector('.card__kicker');
 const title = card.querySelector('.card__title');
 const text = card.querySelector('.card__text');
 const button = card.querySelector('.card__btn');
-const progress = document.querySelector('#progress');
-
-const dots = stations.map((s) => {
-  const el = document.createElement('span');
-  el.className = 'dot';
-  el.style.setProperty('--dot-color', s.accent);
-  el.title = s.name;
-  progress.append(el);
-  return el;
-});
 
 function showCard(index) {
   const s = stations[index];
   card.style.setProperty('--accent', s.accent);
-  kicker.textContent = s.kicker;
   title.textContent = s.title;
   text.textContent = s.text;
   button.textContent = s.button;
   button.disabled = false;
-  // A stop can have its own hint (e.g. the table's curtains); otherwise show
-  // the generic one until the user has tapped or dragged something.
-  hint.textContent = s.hint ?? DEFAULT_HINT;
-  hint.classList.toggle('is-hidden', !s.hint && interacted);
   card.classList.remove('is-hidden');
-  dots.forEach((d, i) => {
-    d.classList.toggle('is-active', i === index);
-    d.classList.toggle('is-visited', i < index);
-  });
 }
 
 function hideCard() {
@@ -325,6 +293,7 @@ function arrive(index) {
   Object.assign(orbit, { yaw: 0, pitch: 0, targetYaw: 0, targetPitch: 0 });
   arrivedAt = clock.elapsedTime;
   velocity.set(0, 0, 0);
+  if (!stageOpen) return; // behind the curtains: the bar appears when they open
   showCard(index);
   button.focus({ preventScroll: true });
 }
@@ -332,7 +301,9 @@ function arrive(index) {
 button.addEventListener('click', () => {
   if (flight || afterOrbitReset) return;
   hideCard();
-  const go = () => (current === stations.length - 1 ? hyperjump() : flyToStation(current + 1));
+  // The last stop's button restarts: the curtains close, and the journey
+  // resets behind them.
+  const go = () => (current === stations.length - 1 ? closeStage(resetJourney) : flyToStation(current + 1));
   // If the user dragged round the object, swing back to the front first so
   // the flight path doesn't cut through it.
   if (Math.abs(orbit.yaw) + Math.abs(orbit.pitch) < 0.02) go();
@@ -378,13 +349,6 @@ function updateReaction(r, dt) {
 
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
-const hint = card.querySelector('.card__hint');
-const DEFAULT_HINT = hint.textContent;
-let interacted = false;
-function markInteracted() {
-  interacted = true;
-  hint.classList.add('is-hidden');
-}
 
 function pickFruit(clientX, clientY) {
   if (flight) return null;
@@ -474,7 +438,6 @@ canvas.addEventListener('pointermove', (e) => {
       ORBIT_PITCH_MIN,
       ORBIT_PITCH_MAX,
     );
-    markInteracted();
   }
   p.lastX = e.clientX;
   p.lastY = e.clientY;
@@ -490,7 +453,6 @@ canvas.addEventListener('pointerup', (e) => {
   const station = stations[current];
   // Objects can claim a tap for themselves (the table's curtains do).
   if (!station.onTap?.(hit)) poke(station, hit);
-  markInteracted();
 });
 canvas.addEventListener('pointercancel', (e) => {
   if (pointerDown?.id === e.pointerId) pointerDown = null;
@@ -566,5 +528,6 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
-introFlight();
+// Start parked at the first stop, hidden behind the closed curtains.
+resetJourney();
 requestAnimationFrame(tick);
