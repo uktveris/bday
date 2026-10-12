@@ -12,10 +12,10 @@
 export const FRUITS = [
   {
     kind: 'letter',
-    voidColor: '#3a080c', // dark red
+    voidColor: '#000000', // black
     accent: '#ffe2a8',
     title: 'Labas;)',
-    text: `kadangi siandien tavo gimtadienis ir mes nesame kartu, nusprendziau padovanoti biski kitokia dovana:D cia labai daug random dalyku, bet turetu buti VISAI juokinga. LABAI sveikinu tave su gimtadieniu (pagaliau busim tokio pacio amziaus hehe), ir neitiketinai dziaugiuosi kad tave pazistu!! (Cia pirma puse mano dovanos:D)`,
+    text: `kadangi siandien tavo gimtadienis ir mes nesame kartu, nusprendziau padovanoti biski kitokia dovana:D cia keletas random dalyku, bet turetu buti VISAI juokinga. LABAI sveikinu tave su gimtadieniu (pagaliau busim tokio pacio amziaus hehe), ir neitiketinai dziaugiuosi kad tave pazistu!! (Cia pirma puse mano dovanos:D)`,
     button: 'Toliau',
   },
   {

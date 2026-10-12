@@ -108,88 +108,33 @@ body {
   }
 }
 
-/* Theatre curtains: cover the whole screen until the note is clicked */
+/* Theatre curtains: cover the whole screen until the note is clicked.
+   The cloth itself is drawn on a canvas (see src/stage.js). */
 .stage {
-  --pleat: clamp(44px, 7vw, 96px);
-  --stage-time: 1.9s;
   position: fixed;
   inset: 0;
   z-index: 10;
   overflow: hidden;
 }
 
+/* Until the script has drawn the first frame, show plain pleated velvet so
+   the page never flashes the scene behind. */
+.stage:not(.is-live) {
+  background:
+    linear-gradient(to bottom, rgba(40, 0, 20, 0.5), rgba(40, 0, 20, 0) 25%, rgba(40, 0, 20, 0) 78%, rgba(40, 0, 20, 0.4)),
+    linear-gradient(90deg, #86144c 0%, #e23e8a 22%, #ff84c0 44%, #e8468f 62%, #a81f5d 84%, #86144c 100%) 0 0 / clamp(44px, 9vw, 110px) 100%;
+}
+
 .stage.is-open {
   pointer-events: none;
 }
 
-.stage__half {
+.stage__cloth {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 50.5%;
-  /* Shading top and bottom, over vertical velvet pleats. */
-  background:
-    linear-gradient(to bottom, rgba(40, 0, 20, 0.45), rgba(40, 0, 20, 0) 22%, rgba(40, 0, 20, 0) 78%, rgba(40, 0, 20, 0.35)),
-    linear-gradient(90deg, #9c1b55 0%, #e2428b 20%, #ff8cc4 44%, #f0559c 62%, #c02c6e 84%, #9c1b55 100%) 0 0 / var(--pleat) 100%;
-  transition: transform var(--stage-time) cubic-bezier(0.65, 0, 0.35, 1);
-  will-change: transform;
-}
-
-/* Gold band and fringe along the hem. */
-.stage__half::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: clamp(18px, 3.2vh, 30px);
-  background:
-    repeating-linear-gradient(90deg, rgba(90, 55, 10, 0.55) 0 2px, rgba(0, 0, 0, 0) 2px 6px),
-    linear-gradient(to bottom, #fbe29a, #e0ad4c 45%, #b9832a);
-  box-shadow: 0 -2px 0 #fff0bd, 0 -5px 0 #c7933a;
-}
-
-.stage__half--left {
-  left: 0;
-  transform-origin: left center;
-  box-shadow: inset -18px 0 26px -12px rgba(40, 0, 20, 0.6);
-}
-
-.stage__half--right {
-  right: 0;
-  transform-origin: right center;
-  box-shadow: inset 18px 0 26px -12px rgba(40, 0, 20, 0.6);
-}
-
-/* Opening gathers each half toward its own side, squeezing the pleats. */
-.stage.is-open .stage__half {
-  transform: scaleX(0);
-}
-
-.stage__valance {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: clamp(70px, 15vh, 150px);
-  filter: drop-shadow(0 10px 12px rgba(20, 0, 10, 0.55));
-  transition: transform var(--stage-time) cubic-bezier(0.65, 0, 0.35, 1);
-}
-
-.stage__swag {
-  --swag: clamp(90px, 16vw, 220px);
+  inset: 0;
+  width: 100%;
   height: 100%;
-  border-top: clamp(8px, 1.6vh, 14px) solid #e0ad4c;
-  background:
-    linear-gradient(to bottom, rgba(40, 0, 20, 0.15), rgba(40, 0, 20, 0.5)),
-    linear-gradient(90deg, #8a1549 0%, #cf3a7e 22%, #f773b3 46%, #d9478b 64%, #8a1549 100%) 0 0 / calc(var(--pleat) * 0.7) 100%;
-  /* Scalloped lower edge: a row of hanging half-ellipses. */
-  -webkit-mask: radial-gradient(ellipse 50% 100% at 50% 0, #000 98%, transparent 100%) 0 0 / var(--swag) 100% repeat-x;
-  mask: radial-gradient(ellipse 50% 100% at 50% 0, #000 98%, transparent 100%) 0 0 / var(--swag) 100% repeat-x;
-}
-
-.stage.is-open .stage__valance {
-  transform: translateY(-115%);
+  display: block;
 }
 
 /* The little paper note pinned to the curtains. */
@@ -276,8 +221,5 @@ body {
   }
   .stage__note {
     animation: none;
-  }
-  .stage {
-    --stage-time: 0.01s;
   }
 }

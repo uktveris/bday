@@ -6,6 +6,7 @@ import { createFruit } from './fruits.js';
 import { createJuice } from './juice.js';
 import { addLabel } from './label.js';
 import { createMotes } from './motes.js';
+import { createStage } from './stage.js';
 
 const BASE_FOV = 45;
 const MAX_FOV_KICK = 22;
@@ -219,12 +220,15 @@ function flyToStation(index) {
 
 /* ------------------------------ Theatre curtains ----------------------------- */
 
-// A full-screen curtain (plain HTML/CSS, see style.css) hides everything until
-// its note is clicked, then opens straight onto the first stop. Restarting
-// from the last stop closes it again and resets the journey behind it.
+// A full-screen curtain (drawn on its own canvas, see stage.js) hides
+// everything until its note is clicked, then opens straight onto the first
+// stop. Restarting from the last stop closes it again and resets the journey
+// behind it.
 const stage = document.querySelector('#stage');
 const stageNote = stage.querySelector('.stage__note');
-const STAGE_MS = reducedMotion ? 50 : 1900; // matches --stage-time in style.css
+const curtain = createStage(stage.querySelector('.stage__cloth'), { reducedMotion });
+stage.classList.add('is-live'); // the canvas has taken over from the CSS placeholder
+const STAGE_MS = curtain.durationMs;
 let stageOpen = false;
 
 function openStage() {
@@ -232,18 +236,20 @@ function openStage() {
   stageOpen = true;
   stageNote.disabled = true;
   stage.classList.add('is-open');
+  curtain.open();
   arrivedAt = clock.elapsedTime;
   // Bring the button bar in once the curtains are mostly out of the way.
   setTimeout(() => {
     showCard(current);
     button.focus({ preventScroll: true });
-  }, STAGE_MS * 0.55);
+  }, STAGE_MS * 0.7);
 }
 
 function closeStage(then) {
   stageOpen = false;
   stage.classList.add('is-closing');
   stage.classList.remove('is-open');
+  curtain.close();
   setTimeout(() => {
     then();
     stage.classList.remove('is-closing');
