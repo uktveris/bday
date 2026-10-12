@@ -37,6 +37,10 @@ try {
 }
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight, false);
+// The table's glass case is rendered with real transmission, which needs an
+// extra pass over the scene. Kept at full resolution so the book title seen
+// through the glass stays sharp; lower this if the table stop is slow.
+renderer.transmissionResolutionScale = 1;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 
@@ -100,7 +104,13 @@ function viewFor(station) {
   const tan = Math.tan(THREE.MathUtils.degToRad(BASE_FOV / 2));
   let d;
   let sy;
-  if (aspect >= 1) {
+  if (station.extent) {
+    // Flat things with lots of text (the letter) are framed by their real
+    // size: as big as fits between the progress dots and the button bar.
+    const { w, h } = station.extent;
+    d = Math.max(w / 2 / (0.94 * aspect * tan), h / 2 / (0.78 * tan));
+    sy = -0.045 * 2 * d * tan;
+  } else if (aspect >= 1) {
     // fruit spans ~64% of the height, at most 60% of the width
     d = Math.max(r / (0.64 * tan), r / (0.6 * aspect * tan));
     sy = -0.05 * 2 * d * tan;
@@ -536,7 +546,7 @@ function tick() {
     const r = s.react;
     updateReaction(r, dt);
     // Sway rather than spin, so the printed text keeps facing the viewer.
-    s.pivot.rotation.y = Math.sin(time * 0.45 + i * 1.7) * 0.28 + r.spin.x;
+    s.pivot.rotation.y = Math.sin(time * 0.45 + i * 1.7) * 0.28 * (s.sway ?? 1) + r.spin.x;
     s.group.rotation.set(r.tiltX.x, 0, r.tiltZ.x);
     s.group.scale.set(1 - r.squash.x * 0.5, 1 + r.squash.x, 1 - r.squash.x * 0.5);
     s.group.position.y = s.position.y + Math.sin(time * 0.8 + s.position.x) * 0.4 + r.hop.x;

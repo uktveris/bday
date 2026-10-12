@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
-// Shared Juicy-glam bits: velour/gold/crystal materials, crystal lettering
-// and sparkle glints. Used by the throne and the coffee table.
+// Shared Juicy-glam bits: velour/gold/crystal materials (plus their more
+// realistic velvet-pile and aged-gold versions), crystal lettering, sparkle
+// glints and upholstery helpers. Used by the throne and the coffee table.
 
 const rand = (a, b) => a + Math.random() * (b - a);
 
@@ -22,20 +23,6 @@ export function materials(envMap) {
     velour: velour('#ff5fa8', '#ffd3ec'),
     velourDeep: velour('#e33d86', '#ffb3d9'),
     velourHeart: velour('#ff2e74', '#ffc2d8'),
-    platform: new THREE.MeshStandardMaterial({
-      color: '#161618',
-      roughness: 0.55,
-      envMap,
-      envMapIntensity: 0.3,
-    }),
-    lacquer: new THREE.MeshPhysicalMaterial({
-      color: '#ff5fa8',
-      roughness: 0.35,
-      clearcoat: 1,
-      clearcoatRoughness: 0.12,
-      envMap,
-      envMapIntensity: 0.6,
-    }),
     gold: new THREE.MeshStandardMaterial({
       color: '#f6c870',
       metalness: 1,
@@ -51,6 +38,83 @@ export function materials(envMap) {
       envMap,
       envMapIntensity: 1.8,
     }),
+  };
+}
+
+/* ------------------------------ Realistic finishes ----------------------------- */
+
+export function canvasTexture(size, draw, color = false) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  draw(c.getContext('2d'), size);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  if (color) tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+export const softDot = (ctx, x, y, r, rgba) => {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, rgba);
+  g.addColorStop(1, 'rgba(128,128,128,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(x - r, y - r, r * 2, r * 2);
+};
+
+// Velvet: a fine pile grain (bump) plus faint crushed patches (colour).
+// Gold: uneven polish (roughness) and a little patina (colour), so it reads
+// as gilded, slightly aged wood rather than fresh plastic chrome.
+export function richMaterials(envMap) {
+  const base = materials(envMap);
+
+  const pile = canvasTexture(256, (ctx, s) => {
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < 9000; i++) {
+      const v = Math.random() < 0.5 ? 40 : 215;
+      softDot(ctx, rand(0, s), rand(0, s), rand(1.2, 2.6), `rgba(${v},${v},${v},0.5)`);
+    }
+  });
+  const crush = canvasTexture(256, (ctx, s) => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < 60; i++) {
+      softDot(ctx, rand(0, s), rand(0, s), rand(20, 70), Math.random() < 0.6 ? 'rgba(170,150,165,0.22)' : 'rgba(255,255,255,0.3)');
+    }
+  }, true);
+  const velvet = (m) => {
+    const v = m.clone();
+    v.map = crush;
+    v.bumpMap = pile;
+    v.bumpScale = 0.6;
+    return v;
+  };
+
+  const polish = canvasTexture(256, (ctx, s) => {
+    ctx.fillStyle = '#9a9a9a';
+    ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < 140; i++) {
+      const v = Math.random() < 0.5 ? 70 : 235;
+      softDot(ctx, rand(0, s), rand(0, s), rand(8, 40), `rgba(${v},${v},${v},0.35)`);
+    }
+  });
+  const patina = canvasTexture(256, (ctx, s) => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < 90; i++) softDot(ctx, rand(0, s), rand(0, s), rand(10, 45), 'rgba(196,150,96,0.3)');
+  }, true);
+  const gold = base.gold.clone();
+  gold.map = patina;
+  gold.roughnessMap = polish;
+  gold.roughness = 0.5; // scaled by the polish map: ~0.14 (bright) to 0.46 (dull)
+
+  return {
+    ...base,
+    velour: velvet(base.velour),
+    velourDeep: velvet(base.velourDeep),
+    velourHeart: velvet(base.velourHeart),
+    gold,
   };
 }
 
@@ -199,3 +263,27 @@ export function createSparkles(anchors, count = 12, size = 7) {
   };
 }
 
+
+/* ------------------------------ Upholstery helpers ----------------------------- */
+
+// Builds a padded surface from a grid: `place(u, v)` maps the unit square to
+// (x, y) on the cushion, `height(x, y)` gives how far it bulges out (+z).
+export function paddedSurface(segX, segY, place, height) {
+  const geo = new THREE.PlaneGeometry(1, 1, segX, segY);
+  const pos = geo.attributes.position;
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < pos.count; i++) {
+    const [x, y] = place(pos.getX(i) + 0.5, pos.getY(i) + 0.5);
+    pos.setXYZ(i, x, y, height(x, y));
+    uv.setXY(i, x / 20, y / 20); // even fabric grain regardless of the grid
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+export function studs(points, radius, material) {
+  const mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(radius, 10, 8), material, points.length);
+  const m = new THREE.Matrix4();
+  points.forEach((p, i) => mesh.setMatrixAt(i, m.makeTranslation(p.x, p.y, p.z)));
+  return mesh;
+}
